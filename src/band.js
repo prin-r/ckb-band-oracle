@@ -23,8 +23,7 @@ const fetchSymbols = async () => {
   return res['result']
 }
 
-const fetchBandOracle = async () => {
-  const symbols = await fetchSymbols()
+const fetchBandOracle = async symbols => {
   let res = await fetch(endpoint + '/oracle/request_prices', {
     method: 'POST',
     headers: {
@@ -42,5 +41,6 @@ const fetchBandOracle = async () => {
 }
 
 module.exports = {
+  fetchSymbols,
   fetchBandOracle,
 }

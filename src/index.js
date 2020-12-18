@@ -1,29 +1,44 @@
-const WebSocket = require('ws')
-const { CKB_WS_URL } = require('./utils/const')
-const { postBandOracle } = require('./poster/poster')
+const { getCells, updateOracleLiveCells } = require('./rpc')
+const { parseBandData } = require('./utils')
+const { fetchSymbols, fetchBandOracle } = require('./band')
 
-const startPoster = async () => {
-  let ws = new WebSocket(CKB_WS_URL)
-
-  ws.on('open', function open() {
-    ws.send('{"id": 2, "jsonrpc": "2.0", "method": "subscribe", "params": ["new_tip_header"]}')
-  })
-
-  ws.on('message', async function incoming(data) {
-    if (JSON.parse(data).params) {
-      const tipNumber = JSON.parse(JSON.parse(data).params.result).number
-      console.info('New Block', tipNumber)
-      if (parseInt(tipNumber, 16) % 3 === 0) {
-        await postBandOracle()
+;(async () => {
+  while (true) {
+    try {
+      console.log('--------------------- getCells')
+      const liveCells = await getCells()
+      console.log(`Got ${liveCells.length} cells`)
+      if (liveCells.length === 0) {
+        continue
       }
+
+      console.log('--------------------- fetchBandOracle')
+      const symbols = await fetchSymbols()
+      const { pricesWithTimestamps } = await fetchBandOracle(symbols)
+      console.log(`Got ${pricesWithTimestamps.length} pricesWithTimestamps`)
+      // const m = {}
+      // for ({ output_data } of liveCells) {
+      //   try {
+      //     const { index, timestamp, price } = parseBandData(output_data)
+      //     if (symbols[index]) {
+      //       m[symbols[index]] = { timestamp, price }
+      //     }
+      //   } catch (e) {}
+      // }
+      // console.log('liveCells: ', JSON.stringify(m))
+
+      console.info('--------------------- update oracle cells data')
+      await updateOracleLiveCells(liveCells, pricesWithTimestamps)
+
+      for (let i = 0; i < 5; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        process.stdout.clearLine()
+        process.stdout.cursorTo(0)
+        process.stdout.write(`wait ${i} secs`)
+      }
+      console.log('\n---------------------------------------------------------------')
+    } catch (e) {
+      console.log(e)
     }
-  })
-
-  ws.on('close', async function close(code, reason) {
-    console.info('Websocket Close', code, reason)
-    await postBandOracle()
-    startPoster()
-  })
-}
-
-startPoster()
+  }
+})()
